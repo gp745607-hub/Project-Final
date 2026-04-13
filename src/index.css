@@ -1,0 +1,212 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+==========================================================================
+【AI HANDOVER NOTE】
+1. DESIGN PHILOSOPHY:
+   - Humanitarian-First Design: Interface conçue pour un contexte humanitaire exigeant clarté, efficacité et fiabilité dans des conditions difficiles (connexion faible, écrans variables)
+   - Professional Minimalism: Épuré mais chaleureux, évitant la froideur corporate tout en maintenant le professionnalisme requis pour une ONG
+   - Resilient UI: Optimisé pour la performance avec skeleton loaders, optimistic updates, et feedback visuel immédiat pour compenser la latence réseau
+   - Accessibility-Driven: Contraste élevé, typographie lisible, états visuels clairs pour garantir l'utilisabilité dans toutes les conditions d'éclairage malgache
+
+2. TYPOGRAPHY:
+   - Inter (Sans): Choisi pour sa lisibilité exceptionnelle à toutes les tailles, son humanisme géométrique qui évite la froideur, et son optimisation pour les écrans de qualité variable. Parfait pour les tableaux de données denses et les interfaces dashboard.
+   - IBM Plex Mono: Police monospace technique pour les codes-barres, identifiants bénéficiaires, et données de traçabilité. Son design équilibré assure la lisibilité des codes scannés.
+
+3. COLOR SYSTEM:
+   - Brand Primary (Bleu H=220): Bleu professionnel évoquant confiance et sécurité, essentiel pour une application humanitaire gérant des données sensibles. Luminosité calibrée pour maintenir le contraste WCAG AAA.
+   - Secondary (Vert H=150): Symbolise l'aide, la croissance et l'espoir, aligné avec la mission humanitaire. Utilisé pour les indicateurs de succès et statistiques positives.
+   - Accent (Orange H=30): Couleur d'urgence et d'action pour les alertes, notifications critiques et call-to-actions. Saturation modérée pour éviter l'agressivité visuelle.
+   - Destructive (Rouge H=10): Réservé aux erreurs critiques et actions irréversibles, avec luminosité ajustée pour la gravité.
+   - Semantic Colors: Success/Warning/Destructive clairement différenciés pour le feedback instantané (scanner, toasts, états de chargement).
+   - Neutral Palette: Gris chauds pour réduire la fatigue oculaire lors de longues sessions de travail administratif.
+
+4. USAGE GUIDE:
+   - Layout: Dashboard full-width avec sidebar navigation (modules: Dashboard, Bénéficiaires, Pointage, Badges, Rapports, Audit). Cards modulaires pour statistiques temps réel.
+   - Performance Patterns: Skeleton loaders sur fond muted, optimistic UI avec états transitoires, spinners minimalistes pour actions rapides.
+   - Feedback System: Toasts en haut à droite (success=vert, warning=orange, error=rouge), états hover/active prononcés pour compenser les écrans tactiles de qualité variable.
+   - Data Density: Tableaux avec alternance subtile (muted background), photos bénéficiaires en thumbnails, codes-barres en mono font.
+   - Scanner Interface: Feedback visuel immédiat (ring color pulse), états success/error avec animations courtes, son optionnel.
+   - Accessibility: Contraste minimum 7:1 (AAA) pour texte principal, focus rings visibles, états disabled clairement différenciés.
+   - Print Optimization: Badges avec border solide, QR codes en noir pur, typographie mono pour identifiants.
+   - Responsive: Desktop-first (1280px+), sidebar collapsible, tableaux avec scroll horizontal si nécessaire.
+==========================================================================
+*/
+
+:root {
+  /* Typography */
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+  --font-mono: IBM Plex Mono, Consolas, monospace;
+  
+  /* Radius */
+  --radius: 0.5rem;
+
+  /* Core UI Tokens */
+  --background: oklch(0.99 0.002 220);
+  --foreground: oklch(0.15 0.01 220);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.01 220);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.01 220);
+  --primary: oklch(0.48 0.18 220);
+  --primary-foreground: oklch(0.98 0.005 220);
+  --secondary: oklch(0.96 0.01 220);
+  --secondary-foreground: oklch(0.18 0.01 220);
+  --muted: oklch(0.96 0.005 220);
+  --muted-foreground: oklch(0.48 0.015 220);
+  --accent: oklch(0.65 0.16 30);
+  --accent-foreground: oklch(0.98 0.005 30);
+  --destructive: oklch(0.55 0.22 10);
+  --destructive-foreground: oklch(0.98 0.005 10);
+  --border: oklch(0.88 0.01 220);
+  --input: oklch(0.88 0.01 220);
+  --ring: oklch(0.48 0.18 220);
+  
+  /* Chart Tokens */
+  --chart-1: oklch(0.55 0.18 220);
+  --chart-2: oklch(0.60 0.18 150);
+  --chart-3: oklch(0.65 0.16 30);
+  --chart-4: oklch(0.62 0.15 280);
+  --chart-5: oklch(0.58 0.14 180);
+  
+  /* Sidebar Tokens */
+  --sidebar: oklch(0.98 0.003 220);
+  --sidebar-foreground: oklch(0.25 0.01 220);
+  --sidebar-primary: oklch(0.48 0.18 220);
+  --sidebar-primary-foreground: oklch(0.98 0.005 220);
+  --sidebar-accent: oklch(0.94 0.008 220);
+  --sidebar-accent-foreground: oklch(0.25 0.01 220);
+  --sidebar-border: oklch(0.90 0.008 220);
+  --sidebar-ring: oklch(0.48 0.18 220);
+}
+
+.dark {
+  --background: oklch(0.12 0.015 220);
+  --foreground: oklch(0.95 0.008 220);
+  --card: oklch(0.15 0.018 220);
+  --card-foreground: oklch(0.95 0.008 220);
+  --popover: oklch(0.14 0.018 220);
+  --popover-foreground: oklch(0.95 0.008 220);
+  --primary: oklch(0.62 0.22 220);
+  --primary-foreground: oklch(0.12 0.015 220);
+  --secondary: oklch(0.22 0.02 220);
+  --secondary-foreground: oklch(0.92 0.008 220);
+  --muted: oklch(0.20 0.018 220);
+  --muted-foreground: oklch(0.65 0.015 220);
+  --accent: oklch(0.70 0.20 30);
+  --accent-foreground: oklch(0.12 0.015 30);
+  --destructive: oklch(0.60 0.25 10);
+  --destructive-foreground: oklch(0.95 0.008 10);
+  --border: oklch(0.25 0.02 220);
+  --input: oklch(0.25 0.02 220);
+  --ring: oklch(0.62 0.22 220);
+  
+  /* Chart Tokens */
+  --chart-1: oklch(0.65 0.22 220);
+  --chart-2: oklch(0.68 0.22 150);
+  --chart-3: oklch(0.72 0.20 30);
+  --chart-4: oklch(0.70 0.20 280);
+  --chart-5: oklch(0.66 0.18 180);
+  
+  /* Sidebar Tokens */
+  --sidebar: oklch(0.10 0.018 220);
+  --sidebar-foreground: oklch(0.88 0.01 220);
+  --sidebar-primary: oklch(0.62 0.22 220);
+  --sidebar-primary-foreground: oklch(0.12 0.015 220);
+  --sidebar-accent: oklch(0.18 0.02 220);
+  --sidebar-accent-foreground: oklch(0.92 0.008 220);
+  --sidebar-border: oklch(0.22 0.02 220);
+  --sidebar-ring: oklch(0.62 0.22 220);
+}
+
+@theme inline {
+  /* Shadcn Core Mapping */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Charts Mapping */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Sidebar Mapping */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Typography */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  /* Radius */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans min-h-screen;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  code, pre {
+    @apply font-mono;
+  }
+
+  ::selection {
+    @apply bg-primary/20 text-primary;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/40;
+  }
+}
