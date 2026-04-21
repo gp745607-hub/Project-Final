@@ -1,3 +1,4 @@
+// VERSION DEPLOY : 21-04-2026-V1
 export const ROUTE_PATHS = {
   HOME: '/',
   LOGIN: '/login',
