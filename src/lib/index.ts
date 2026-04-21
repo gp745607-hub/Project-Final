@@ -186,6 +186,11 @@ export function exportToJSON(data: any, filename: string): void {
   URL.revokeObjectURL(link.href);
 }
 
+export const DB_KEYS = {
+  BENEFICIAIRES: 'made_ong_database_v1',
+  POINTAGES: 'made_ong_pointages_v1'
+};
+
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
@@ -202,6 +207,10 @@ export function debounce<T extends (...args: any[]) => any>(
     timeout = setTimeout(later, wait);
   };
 }
+export const DB_KEYS = {
+  BENEFICIAIRES: 'made_ong_database_v1',
+  POINTAGES: 'made_ong_pointages_v1'
+};
 
 export function throttle<T extends (...args: any[]) => any>(
   func: T,

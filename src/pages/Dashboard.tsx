@@ -1,462 +1,218 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Layout } from '@/components/Layout';
 import { StatsCard, MetricCard, AlertCard } from '@/components/Stats';
-import { Beneficiaire, Pointage, Service, CATEGORIES, formatDate, formatDuration, isPresenceProlongee } from '@/lib/index';
-import { Users, UserCheck, Utensils, AlertTriangle, TrendingUp, Clock, Calendar } from 'lucide-react';
+import { 
+  Beneficiaire, Pointage, Service, CATEGORIES, 
+  formatDate, isPresenceProlongee 
+} from '@/lib/index';
+import { 
+  Users, UserCheck, Utensils, AlertTriangle, 
+  TrendingUp, Clock 
+} from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { motion } from 'framer-motion';
 import { springPresets, staggerContainer, staggerItem } from '@/lib/motion';
 
-interface DashboardStats {
-  totalPresencesToday: number;
-  enfantsPresents: number;
-  repasServis: number;
-  alertesProlongees: number;
-  presencesParHeure: { heure: string; count: number }[];
-  presencesParCategorie: { categorie: string; count: number }[];
-}
-
-interface PresenceActive {
-  beneficiaire: Beneficiaire;
-  entree: string;
-  duree: number;
-}
+// CLÉS DE STOCKAGE (DOIVENT ÊTRE IDENTIQUES PARTOUT)
+const DB_BENEFICIAIRES = 'made_ong_database_v1';
+const DB_POINTAGES = 'made_ong_pointages_v1';
+const DB_SERVICES = 'made_ong_services_v1';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalPresencesToday: 0,
-    enfantsPresents: 0,
-    repasServis: 0,
-    alertesProlongees: 0,
-    presencesParHeure: [],
-    presencesParCategorie: [],
-  });
-  const [presencesActives, setPresencesActives] = useState<PresenceActive[]>([]);
-  const [alertes, setAlertes] = useState<PresenceActive[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // États pour stocker les données brutes
+  const [beneficiaires, setBeneficiaires] = useState<Beneficiaire[]>([]);
+  const [pointages, setPointages] = useState<Pointage[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
 
-  useEffect(() => {
-    loadDashboardData();
-    const interval = setInterval(loadDashboardData, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadDashboardData = async () => {
-    try {
-      const mockBeneficiaires: Beneficiaire[] = [
-        {
-          id: '1',
-          codeBarre: 'MADE001',
-          nom: 'Rakoto',
-          prenom: 'Jean',
-          dateNaissance: '2015-03-15',
-          categorie: 'ENFANT',
-          dateInscription: '2024-01-10',
-          actif: true,
-          archive: false,
-        },
-        {
-          id: '2',
-          codeBarre: 'MADE002',
-          nom: 'Rabe',
-          prenom: 'Marie',
-          dateNaissance: '2010-07-22',
-          categorie: 'ADOLESCENT',
-          dateInscription: '2024-01-15',
-          actif: true,
-          archive: false,
-        },
-        {
-          id: '3',
-          codeBarre: 'MADE003',
-          nom: 'Randria',
-          prenom: 'Paul',
-          dateNaissance: '1985-11-08',
-          categorie: 'ADULTE',
-          dateInscription: '2024-02-01',
-          actif: true,
-          archive: false,
-        },
-      ];
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const mockPointages: Pointage[] = [
-        {
-          id: 'p1',
-          beneficiaireId: '1',
-          codeBarre: 'MADE001',
-          type: 'ENTREE',
-          timestamp: new Date(today.getTime() + 8 * 3600000).toISOString(),
-          scannerType: 'LASER',
-        },
-        {
-          id: 'p2',
-          beneficiaireId: '2',
-          codeBarre: 'MADE002',
-          type: 'ENTREE',
-          timestamp: new Date(today.getTime() + 9 * 3600000).toISOString(),
-          scannerType: 'LASER',
-        },
-        {
-          id: 'p3',
-          beneficiaireId: '3',
-          codeBarre: 'MADE003',
-          type: 'ENTREE',
-          timestamp: new Date(today.getTime() + 7 * 3600000).toISOString(),
-          scannerType: 'LASER',
-        },
-        {
-          id: 'p4',
-          beneficiaireId: '3',
-          codeBarre: 'MADE003',
-          type: 'SORTIE',
-          timestamp: new Date(today.getTime() + 12 * 3600000).toISOString(),
-          scannerType: 'LASER',
-        },
-      ];
-
-      const mockServices: Service[] = [
-        {
-          id: 's1',
-          beneficiaireId: '1',
-          codeBarre: 'MADE001',
-          type: 'CANTINE',
-          timestamp: new Date(today.getTime() + 12 * 3600000).toISOString(),
-        },
-        {
-          id: 's2',
-          beneficiaireId: '2',
-          codeBarre: 'MADE002',
-          type: 'CANTINE',
-          timestamp: new Date(today.getTime() + 12.5 * 3600000).toISOString(),
-        },
-        {
-          id: 's3',
-          beneficiaireId: '3',
-          codeBarre: 'MADE003',
-          type: 'GARGOTE',
-          timestamp: new Date(today.getTime() + 11 * 3600000).toISOString(),
-        },
-      ];
-
-      const todayPointages = mockPointages.filter(
-        (p) => new Date(p.timestamp) >= today
-      );
-
-      const presencesMap = new Map<string, { entree?: Pointage; sortie?: Pointage }>();
-      todayPointages.forEach((p) => {
-        const existing = presencesMap.get(p.beneficiaireId) || {};
-        if (p.type === 'ENTREE') {
-          existing.entree = p;
-        } else {
-          existing.sortie = p;
-        }
-        presencesMap.set(p.beneficiaireId, existing);
-      });
-
-      const actives: PresenceActive[] = [];
-      const alertesList: PresenceActive[] = [];
-
-      presencesMap.forEach((presence, beneficiaireId) => {
-        if (presence.entree && !presence.sortie) {
-          const beneficiaire = mockBeneficiaires.find((b) => b.id === beneficiaireId);
-          if (beneficiaire) {
-            const duree = (Date.now() - new Date(presence.entree.timestamp).getTime()) / (1000 * 60 * 60);
-            const presenceActive = {
-              beneficiaire,
-              entree: presence.entree.timestamp,
-              duree,
-            };
-            actives.push(presenceActive);
-
-            if (isPresenceProlongee(presence.entree.timestamp)) {
-              alertesList.push(presenceActive);
-            }
-          }
-        }
-      });
-
-      const enfantsPresents = actives.filter(
-        (p) => p.beneficiaire.categorie === 'ENFANT'
-      ).length;
-
-      const presencesParHeure: { heure: string; count: number }[] = [];
-      for (let h = 6; h <= 20; h++) {
-        const count = todayPointages.filter((p) => {
-          const hour = new Date(p.timestamp).getHours();
-          return hour === h && p.type === 'ENTREE';
-        }).length;
-        presencesParHeure.push({ heure: `${h}h`, count });
-      }
-
-      const presencesParCategorie = CATEGORIES.map((cat) => ({
-        categorie: cat.label,
-        count: actives.filter((p) => p.beneficiaire.categorie === cat.value).length,
-      }));
-
-      setStats({
-        totalPresencesToday: todayPointages.filter((p) => p.type === 'ENTREE').length,
-        enfantsPresents,
-        repasServis: mockServices.length,
-        alertesProlongees: alertesList.length,
-        presencesParHeure,
-        presencesParCategorie,
-      });
-
-      setPresencesActives(actives);
-      setAlertes(alertesList);
-      setLoading(false);
-    } catch (error) {
-      console.error('Erreur chargement dashboard:', error);
+  // 1. CHARGEMENT DES DONNÉES RÉELLES
+  const loadRealData = () => {
+    if (typeof window !== 'undefined') {
+      const b = localStorage.getItem(DB_BENEFICIAIRES);
+      const p = localStorage.getItem(DB_POINTAGES);
+      const s = localStorage.getItem(DB_SERVICES);
+      
+      setBeneficiaires(b ? JSON.parse(b) : []);
+      setPointages(p ? JSON.parse(p) : []);
+      setServices(s ? JSON.parse(s) : []);
       setLoading(false);
     }
   };
 
-  const heuresPointeData = stats.presencesParHeure.slice(0, 10);
-  const maxCount = Math.max(...heuresPointeData.map((h) => h.count), 1);
+  useEffect(() => {
+    loadRealData();
+    // Rafraîchissement automatique toutes les 10 secondes pour le monitoring
+    const interval = setInterval(loadRealData, 10000);
+    
+    // Ecoute les changements faits dans d'autres onglets (ex: scan sur la page Pointage)
+    window.addEventListener('storage', loadRealData);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', loadRealData);
+    };
+  }, []);
+
+  // 2. CALCULS DES STATISTIQUES (SYNCHRONISÉS)
+  const dashboardStats = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    
+    // Filtrer les logs du jour
+    const todayPointages = pointages.filter(p => new Date(p.timestamp).toDateString() === todayStr);
+    const todayServices = services.filter(s => new Date(s.timestamp).toDateString() === todayStr);
+
+    // Calcul des présences actives (ceux qui sont entrés mais pas encore sortis)
+    const actives: any[] = [];
+    const alertesList: any[] = [];
+    
+    beneficiaires.filter(b => !b.archive).forEach(beneficiaire => {
+      const logs = todayPointages
+        .filter(p => p.beneficiaireId === beneficiaire.id)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      if (logs.length > 0 && logs[0].type === 'ENTREE') {
+        const diffHeures = (Date.now() - new Date(logs[0].timestamp).getTime()) / (1000 * 60 * 60);
+        const presence = { 
+          beneficiaire, 
+          entree: logs[0].timestamp, 
+          duree: diffHeures 
+        };
+        actives.push(presence);
+        if (isPresenceProlongee(logs[0].timestamp)) alertesList.push(presence);
+      }
+    });
+
+    // Fréquentation par heure (pour le graphique)
+    const parHeure = Array.from({ length: 12 }, (_, i) => {
+      const h = i + 7; // De 7h à 18h
+      return {
+        heure: `${h}h`,
+        count: todayPointages.filter(p => p.type === 'ENTREE' && new Date(p.timestamp).getHours() === h).length
+      };
+    });
+
+    return {
+      totalToday: todayPointages.filter(p => p.type === 'ENTREE').length,
+      enfants: actives.filter(p => p.beneficiaire.categorie === 'ENFANT').length,
+      repas: todayServices.length,
+      alertes: alertesList,
+      actives,
+      parHeure,
+      parCategorie: CATEGORIES.map(cat => ({
+        label: cat.label,
+        value: cat.value,
+        count: actives.filter(p => p.beneficiaire.categorie === cat.value).length,
+        color: cat.color
+      }))
+    };
+  }, [beneficiaires, pointages, services]);
+
+  const maxFreq = Math.max(...dashboardStats.parHeure.map(h => h.count), 1);
+
+  if (loading) return <div className="p-10 text-center">Chargement du système...</div>;
 
   return (
     <Layout>
       <div className="w-full p-6 space-y-6">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={springPresets.gentle}
-        >
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Tableau de Bord</h1>
+              <h1 className="text-3xl font-black tracking-tight">MADE Dashboard</h1>
               <p className="text-muted-foreground mt-1">
-                Vue d'ensemble des activités - {formatDate(new Date(), 'long')}
+                Analyse en temps réel — {formatDate(new Date(), 'long')}
               </p>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="w-4 h-4" />
-              <span>Mise à jour automatique toutes les 30s</span>
+            <div className="hidden md:flex items-center gap-2 text-xs font-mono text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              SYSTÈME OPÉRATIONNEL
             </div>
           </div>
         </motion.div>
 
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-          className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-        >
+        {/* CARTES DE STATISTIQUES */}
+        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <motion.div variants={staggerItem}>
-            <StatsCard
-              title="Présences Aujourd'hui"
-              value={stats.totalPresencesToday}
-              icon={<Users className="w-5 h-5" />}
-              trend="+12% vs hier"
-              trendUp={true}
-            />
+            <StatsCard title="Entrées (Jour)" value={dashboardStats.totalToday} icon={<Users />} trend="Cumulatif aujourd'hui" />
           </motion.div>
           <motion.div variants={staggerItem}>
-            <StatsCard
-              title="Enfants Présents"
-              value={stats.enfantsPresents}
-              icon={<UserCheck className="w-5 h-5" />}
-              trend="Actuellement sur site"
-            />
+            <StatsCard title="Enfants sur site" value={dashboardStats.enfants} icon={<UserCheck />} trend="Présence actuelle" />
           </motion.div>
           <motion.div variants={staggerItem}>
-            <StatsCard
-              title="Repas Servis"
-              value={stats.repasServis}
-              icon={<Utensils className="w-5 h-5" />}
-              trend="+8% vs hier"
-              trendUp={true}
-            />
+            <StatsCard title="Services/Repas" value={dashboardStats.repas} icon={<Utensils />} trend="Total délivré" />
           </motion.div>
           <motion.div variants={staggerItem}>
-            <StatsCard
-              title="Alertes Présence"
-              value={stats.alertesProlongees}
-              icon={<AlertTriangle className="w-5 h-5" />}
-              trend=">12h sans sortie"
-              trendUp={false}
-            />
+            <StatsCard title="Alertes" value={dashboardStats.alertes.length} icon={<AlertTriangle />} trend="Durée excessive" trendUp={false} />
           </motion.div>
         </motion.div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ ...springPresets.gentle, delay: 0.2 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-primary" />
-                  Heures de Pointe
-                </CardTitle>
-                <CardDescription>
-                  Fréquentation par heure (entrées)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {heuresPointeData.map((item) => (
-                    <div key={item.heure} className="flex items-center gap-3">
-                      <div className="w-12 text-sm font-medium text-muted-foreground">
-                        {item.heure}
-                      </div>
-                      <div className="flex-1">
-                        <div className="h-8 bg-muted rounded-md overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${(item.count / maxCount) * 100}%` }}
-                            transition={springPresets.gentle}
-                            className="h-full bg-primary flex items-center justify-end pr-2"
-                          >
-                            {item.count > 0 && (
-                              <span className="text-xs font-semibold text-primary-foreground">
-                                {item.count}
-                              </span>
-                            )}
-                          </motion.div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ ...springPresets.gentle, delay: 0.3 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-secondary" />
-                  Présences par Catégorie
-                </CardTitle>
-                <CardDescription>
-                  Répartition des bénéficiaires présents
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {stats.presencesParCategorie.map((item) => {
-                    const cat = CATEGORIES.find((c) => c.label === item.categorie);
-                    return (
-                      <MetricCard
-                        key={item.categorie}
-                        label={item.categorie}
-                        value={item.count}
-                        color={cat?.color}
-                        icon={<UserCheck className="w-4 h-4" />}
-                      />
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {alertes.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...springPresets.gentle, delay: 0.4 }}
-          >
-            <Card className="border-destructive/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="w-5 h-5" />
-                  Alertes de Présence Prolongée
-                </CardTitle>
-                <CardDescription>
-                  Bénéficiaires présents depuis plus de 12 heures
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {alertes.map((alerte) => (
-                    <AlertCard
-                      key={alerte.beneficiaire.id}
-                      beneficiaire={{
-                        nom: alerte.beneficiaire.nom,
-                        prenom: alerte.beneficiaire.prenom,
-                        categorie: alerte.beneficiaire.categorie,
-                        codeBarre: alerte.beneficiaire.codeBarre,
-                      }}
-                      entree={alerte.entree}
-                      duree={alerte.duree}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...springPresets.gentle, delay: 0.5 }}
-        >
-          <Card>
+          {/* GRAPHIQUE FRÉQUENTATION */}
+          <Card className="border-none shadow-lg">
             <CardHeader>
-              <CardTitle>Accès Rapides</CardTitle>
-              <CardDescription>
-                Modules principaux de gestion
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-primary" /> Pics d'affluence</CardTitle>
+              <CardDescription>Nombre d'entrées enregistrées par heure</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <motion.a
-                  href="#/pointage"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="p-6 rounded-lg border bg-card hover:bg-accent transition-colors cursor-pointer"
-                >
-                  <UserCheck className="w-8 h-8 text-primary mb-3" />
-                  <h3 className="font-semibold mb-1">Pointage</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Scanner les entrées/sorties
-                  </p>
-                </motion.a>
-
-                <motion.a
-                  href="#/beneficiaires"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="p-6 rounded-lg border bg-card hover:bg-accent transition-colors cursor-pointer"
-                >
-                  <Users className="w-8 h-8 text-secondary mb-3" />
-                  <h3 className="font-semibold mb-1">Bénéficiaires</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Gérer les profils
-                  </p>
-                </motion.a>
-
-                <motion.a
-                  href="#/services"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="p-6 rounded-lg border bg-card hover:bg-accent transition-colors cursor-pointer"
-                >
-                  <Utensils className="w-8 h-8 text-accent mb-3" />
-                  <h3 className="font-semibold mb-1">Services</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Cantine, Gargote, Médical
-                  </p>
-                </motion.a>
+              <div className="space-y-3">
+                {dashboardStats.parHeure.map((item) => (
+                  <div key={item.heure} className="flex items-center gap-3">
+                    <div className="w-10 text-xs font-bold text-muted-foreground">{item.heure}</div>
+                    <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }} 
+                        animate={{ width: `${(item.count / maxFreq) * 100}%` }}
+                        className="h-full bg-primary flex items-center justify-end pr-2 text-[10px] text-white font-bold"
+                      >
+                        {item.count > 0 ? item.count : ''}
+                      </motion.div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+
+          {/* RÉPARTITION PAR CATÉGORIE */}
+          <Card className="border-none shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-secondary" /> Groupes Présents</CardTitle>
+              <CardDescription>Détails des bénéficiaires actuellement sur site</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {dashboardStats.parCategorie.map((item) => (
+                <MetricCard 
+                  key={item.value} 
+                  label={item.label} 
+                  value={item.count} 
+                  color={item.color} 
+                  icon={<UserCheck className="w-4 h-4" />} 
+                />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* SECTION ALERTES */}
+        {dashboardStats.alertes.length > 0 && (
+          <Card className="border-red-200 bg-red-50/30">
+            <CardHeader>
+              <CardTitle className="text-red-600 flex items-center gap-2">
+                <AlertTriangle className="animate-bounce" /> Attention : Présences prolongées
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {dashboardStats.alertes.map((alerte: any) => (
+                <AlertCard 
+                  key={alerte.beneficiaire.id} 
+                  beneficiaire={alerte.beneficiaire}
+                  entree={alerte.entree}
+                  duree={alerte.duree}
+                />
+              ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </Layout>
   );

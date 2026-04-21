@@ -1,550 +1,175 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  Clock, Users, LogIn, LogOut, AlertCircle, 
+  UserPlus, Search, ShieldCheck, Zap, Activity
+} from 'lucide-react'
 import { Layout } from '@/components/Layout'
 import { ScannerInterface } from '@/components/ScannerInterface'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
-import { Clock, Users, LogIn, LogOut, AlertCircle, UserPlus, Search, Filter } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { springPresets, fadeInUp, staggerContainer, staggerItem } from '@/lib/motion'
 import type { Beneficiaire, Pointage } from '@/lib/index'
-import { CATEGORIES, formatDate, formatDuration, getCategorieColor, getCategorieLabel, getPresenceDuration, isPresenceProlongee } from '@/lib/index'
+import { formatDate, formatDuration, getPresenceDuration, isPresenceProlongee } from '@/lib/index'
 
-interface PresenceActuelle {
-  beneficiaire: Beneficiaire
-  entree: Pointage
-  sortie?: Pointage
-  duree: number
-  prolongee: boolean
-}
+const DB_BENEFICIAIRES = 'made_ong_database_v1'
+const DB_POINTAGES = 'made_ong_pointages_v1'
 
-export default function Pointage() {
+export default function PointagePage() {
   const { toast } = useToast()
-  const [pointages, setPointages] = useState<Pointage[]>([])
   const [beneficiaires, setBeneficiaires] = useState<Beneficiaire[]>([])
-  const [presencesActuelles, setPresencesActuelles] = useState<PresenceActuelle[]>([])
-  const [selectedCategorie, setSelectedCategorie] = useState<string>('ALL')
+  const [pointages, setPointages] = useState<Pointage[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [isManualDialogOpen, setIsManualDialogOpen] = useState(false)
-  const [manualCodeBarre, setManualCodeBarre] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
-  const [stats, setStats] = useState({
-    totalPresences: 0,
-    entrees: 0,
-    sorties: 0,
-    presentsActuels: 0,
-    alertesProlongees: 0
-  })
 
+  // Chargement et Synchro
   useEffect(() => {
-    loadMockData()
+    const load = () => {
+      setBeneficiaires(JSON.parse(localStorage.getItem(DB_BENEFICIAIRES) || '[]'))
+      setPointages(JSON.parse(localStorage.getItem(DB_POINTAGES) || '[]'))
+    }
+    load()
+    window.addEventListener('storage', load)
+    return () => window.removeEventListener('storage', load)
   }, [])
 
   useEffect(() => {
-    updatePresencesActuelles()
-    updateStats()
+    localStorage.setItem(DB_POINTAGES, JSON.stringify(pointages))
+  }, [pointages])
+
+  const presencesActuelles = useMemo(() => {
+    const today = new Date().toDateString()
+    return beneficiaires.filter(b => !b.archive).map(b => {
+      const logs = pointages.filter(p => p.beneficiaireId === b.id && new Date(p.timestamp).toDateString() === today)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      if (logs.length > 0 && logs[0].type === 'ENTREE') {
+        return { beneficiaire: b, entree: logs[0], duree: getPresenceDuration(logs[0].timestamp), prolongee: isPresenceProlongee(logs[0].timestamp) }
+      }
+      return null
+    }).filter(Boolean) as any[]
   }, [pointages, beneficiaires])
 
-  const loadMockData = () => {
-    const mockBeneficiaires: Beneficiaire[] = [
-      {
-        id: '1',
-        codeBarre: 'MADE1234567890',
-        nom: 'Rakoto',
-        prenom: 'Jean',
-        dateNaissance: '2010-05-15',
-        categorie: 'ENFANT',
-        photo: 'https://images.unsplash.com/photo-1543181077-099f32f30a1c?w=200',
-        dateInscription: '2024-01-10',
-        actif: true,
-        archive: false
-      },
-      {
-        id: '2',
-        codeBarre: 'MADE0987654321',
-        nom: 'Razafy',
-        prenom: 'Marie',
-        dateNaissance: '2005-08-22',
-        categorie: 'ADOLESCENT',
-        photo: 'https://images.unsplash.com/photo-1553775927-a071d5a6a39a?w=200',
-        dateInscription: '2024-01-15',
-        actif: true,
-        archive: false
-      },
-      {
-        id: '3',
-        codeBarre: 'MADE5555666677',
-        nom: 'Andria',
-        prenom: 'Paul',
-        dateNaissance: '1985-03-10',
-        categorie: 'ADULTE',
-        photo: 'https://images.unsplash.com/photo-1579210504658-94fcc9cfa42f?w=200',
-        dateInscription: '2024-02-01',
-        actif: true,
-        archive: false
-      }
-    ]
-
-    const now = new Date()
-    const mockPointages: Pointage[] = [
-      {
-        id: 'p1',
-        beneficiaireId: '1',
-        codeBarre: 'MADE1234567890',
-        type: 'ENTREE',
-        timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-        scannerType: 'LASER'
-      },
-      {
-        id: 'p2',
-        beneficiaireId: '2',
-        codeBarre: 'MADE0987654321',
-        type: 'ENTREE',
-        timestamp: new Date(now.getTime() - 14 * 60 * 60 * 1000).toISOString(),
-        scannerType: 'LASER'
-      },
-      {
-        id: 'p3',
-        beneficiaireId: '3',
-        codeBarre: 'MADE5555666677',
-        type: 'ENTREE',
-        timestamp: new Date(now.getTime() - 4 * 60 * 60 * 1000).toISOString(),
-        scannerType: 'MANUEL',
-        operateur: 'Made711@gmail.com'
-      }
-    ]
-
-    setBeneficiaires(mockBeneficiaires)
-    setPointages(mockPointages)
-  }
-
-  const updatePresencesActuelles = () => {
-    const presences: PresenceActuelle[] = []
-    const today = new Date().toDateString()
-
-    beneficiaires.forEach(beneficiaire => {
-      const pointagesBenef = pointages
-        .filter(p => p.beneficiaireId === beneficiaire.id)
-        .filter(p => new Date(p.timestamp).toDateString() === today)
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-
-      if (pointagesBenef.length > 0 && pointagesBenef[0].type === 'ENTREE') {
-        const entree = pointagesBenef[0]
-        const sortie = pointagesBenef.find(p => p.type === 'SORTIE')
-        const duree = getPresenceDuration(entree.timestamp, sortie?.timestamp)
-        const prolongee = isPresenceProlongee(entree.timestamp, sortie?.timestamp)
-
-        presences.push({
-          beneficiaire,
-          entree,
-          sortie,
-          duree,
-          prolongee
-        })
-      }
-    })
-
-    setPresencesActuelles(presences)
-  }
-
-  const updateStats = () => {
-    const today = new Date().toDateString()
-    const todayPointages = pointages.filter(p => new Date(p.timestamp).toDateString() === today)
-
-    setStats({
-      totalPresences: todayPointages.length,
-      entrees: todayPointages.filter(p => p.type === 'ENTREE').length,
-      sorties: todayPointages.filter(p => p.type === 'SORTIE').length,
-      presentsActuels: presencesActuelles.length,
-      alertesProlongees: presencesActuelles.filter(p => p.prolongee).length
-    })
-  }
-
-  const handleScan = async (codeBarre: string) => {
-    setIsProcessing(true)
-
-    try {
-      const beneficiaire = beneficiaires.find(b => b.codeBarre === codeBarre)
-
-      if (!beneficiaire) {
-        toast({
-          title: 'Bénéficiaire introuvable',
-          description: `Code-barres ${codeBarre} non reconnu`,
-          variant: 'destructive'
-        })
-        return
-      }
-
-      if (!beneficiaire.actif || beneficiaire.archive) {
-        toast({
-          title: 'Bénéficiaire inactif',
-          description: `${beneficiaire.prenom} ${beneficiaire.nom} est archivé ou inactif`,
-          variant: 'destructive'
-        })
-        return
-      }
-
-      const today = new Date().toDateString()
-      const todayPointages = pointages
-        .filter(p => p.beneficiaireId === beneficiaire.id)
-        .filter(p => new Date(p.timestamp).toDateString() === today)
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-
-      const lastPointage = todayPointages[0]
-      const type: 'ENTREE' | 'SORTIE' = !lastPointage || lastPointage.type === 'SORTIE' ? 'ENTREE' : 'SORTIE'
-
-      const newPointage: Pointage = {
-        id: `p${Date.now()}`,
-        beneficiaireId: beneficiaire.id,
-        codeBarre,
-        type,
-        timestamp: new Date().toISOString(),
-        scannerType: 'LASER'
-      }
-
-      setPointages(prev => [newPointage, ...prev])
-
-      toast({
-        title: type === 'ENTREE' ? 'Entrée enregistrée' : 'Sortie enregistrée',
-        description: `${beneficiaire.prenom} ${beneficiaire.nom} - ${formatDate(new Date(), 'time')}`,
-        variant: 'default'
-      })
-    } catch (error) {
-      toast({
-        title: 'Erreur',
-        description: 'Impossible d\'enregistrer le pointage',
-        variant: 'destructive'
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleManualScan = async () => {
-    if (!manualCodeBarre.trim()) {
-      toast({
-        title: 'Code-barres requis',
-        description: 'Veuillez saisir un code-barres',
-        variant: 'destructive'
-      })
+  const handleScan = async (code: string) => {
+    const cleanCode = code.trim().toUpperCase()
+    const b = beneficiaires.find(x => x.codeBarre.toUpperCase() === cleanCode)
+    if (!b) {
+      toast({ title: "Badge Inconnu", variant: "destructive" })
       return
     }
-
-    await handleScan(manualCodeBarre.trim())
-    setManualCodeBarre('')
-    setIsManualDialogOpen(false)
+    const type = presencesActuelles.find(p => p.beneficiaire.id === b.id) ? 'SORTIE' : 'ENTREE'
+    const newLog = { id: crypto.randomUUID(), beneficiaireId: b.id, type, timestamp: new Date().toISOString() }
+    setPointages([newLog, ...pointages])
+    toast({ 
+        title: type === 'ENTREE' ? "ENTRÉE VALIDÉE" : "SORTIE VALIDÉE", 
+        description: `${b.prenom} ${b.nom}`,
+        className: type === 'ENTREE' ? "bg-emerald-600 text-white" : "bg-indigo-600 text-white"
+    })
   }
-
-  const filteredPresences = presencesActuelles.filter(p => {
-    const matchesCategorie = selectedCategorie === 'ALL' || p.beneficiaire.categorie === selectedCategorie
-    const matchesSearch = searchQuery === '' || 
-      p.beneficiaire.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.beneficiaire.prenom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.beneficiaire.codeBarre.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesCategorie && matchesSearch
-  })
 
   return (
     <Layout>
-      <div className="w-full min-h-screen bg-background">
-        <div className="w-full px-6 py-8">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={springPresets.gentle}
-          >
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h1 className="text-4xl font-bold tracking-tight">Pointage</h1>
-                <p className="text-muted-foreground mt-2">Gestion des entrées et sorties en temps réel</p>
-              </div>
-              <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="lg" className="gap-2">
-                    <UserPlus className="h-5 w-5" />
-                    Pointage manuel
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Pointage manuel</DialogTitle>
-                    <DialogDescription>
-                      Saisissez le code-barres du bénéficiaire pour enregistrer un pointage
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="manual-code">Code-barres</Label>
-                      <Input
-                        id="manual-code"
-                        placeholder="MADE1234567890"
-                        value={manualCodeBarre}
-                        onChange={(e) => setManualCodeBarre(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleManualScan()}
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsManualDialogOpen(false)}>
-                      Annuler
-                    </Button>
-                    <Button onClick={handleManualScan} disabled={isProcessing}>
-                      Enregistrer
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+      <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 p-4 md:p-8">
+        <header className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                <span className="text-[10px] font-black tracking-[0.2em] text-slate-500 uppercase">Terminal de Pointage v2.0</span>
             </div>
+            <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">Flux de Présence</h1>
+          </div>
+          <div className="flex gap-3">
+             <div className="bg-white dark:bg-slate-900 p-1 rounded-xl shadow-inner border flex gap-1">
+                <StatSimple label="Presents" value={presencesActuelles.length} color="text-emerald-600" />
+                <div className="w-[1px] bg-slate-200" />
+                <StatSimple label="Alertes" value={presencesActuelles.filter(p => p.prolongee).length} color="text-red-500" />
+             </div>
+          </div>
+        </header>
 
-            <motion.div
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8"
-            >
-              <motion.div variants={staggerItem}>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Total pointages</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-xl bg-primary/10">
-                        <Clock className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-3xl font-bold">{stats.totalPresences}</div>
-                        <p className="text-xs text-muted-foreground">Aujourd'hui</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div variants={staggerItem}>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Entrées</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-xl bg-chart-2/10">
-                        <LogIn className="h-6 w-6 text-chart-2" />
-                      </div>
-                      <div>
-                        <div className="text-3xl font-bold">{stats.entrees}</div>
-                        <p className="text-xs text-muted-foreground">Aujourd'hui</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div variants={staggerItem}>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Sorties</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-xl bg-chart-3/10">
-                        <LogOut className="h-6 w-6 text-chart-3" />
-                      </div>
-                      <div>
-                        <div className="text-3xl font-bold">{stats.sorties}</div>
-                        <p className="text-xs text-muted-foreground">Aujourd'hui</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div variants={staggerItem}>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Présents actuels</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-xl bg-primary/10">
-                        <Users className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-3xl font-bold">{stats.presentsActuels}</div>
-                        <p className="text-xs text-muted-foreground">En ce moment</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div variants={staggerItem}>
-                <Card className={stats.alertesProlongees > 0 ? 'border-destructive' : ''}>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Alertes</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-xl bg-destructive/10">
-                        <AlertCircle className="h-6 w-6 text-destructive" />
-                      </div>
-                      <div>
-                        <div className="text-3xl font-bold">{stats.alertesProlongees}</div>
-                        <p className="text-xs text-muted-foreground">Présence +12h</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </motion.div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <motion.div
-                variants={fadeInUp}
-                initial="initial"
-                animate="animate"
-                className="lg:col-span-1"
-              >
-                <Card className="h-full">
-                  <CardHeader>
-                    <CardTitle>Scanner laser</CardTitle>
-                    <CardDescription>Détection automatique des scans</CardDescription>
-                  </CardHeader>
-                  <CardContent>
+        <div className="grid lg:grid-cols-12 gap-8">
+          {/* ZONE SCANNER */}
+          <div className="lg:col-span-4 space-y-6">
+            <Card className="border-none shadow-[0_20px_50px_rgba(0,0,0,0.1)] bg-slate-900 text-white overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-10"><ShieldCheck size={100} /></div>
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2 font-bold">
+                  <Zap className="text-yellow-400 fill-yellow-400" size={20} /> Lecteur Laser
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <div className="bg-slate-800/50 border border-white/10 rounded-2xl p-6 backdrop-blur-sm mb-6">
                     <ScannerInterface onScan={handleScan} />
-                  </CardContent>
-                </Card>
-              </motion.div>
+                </div>
+                <div className="flex items-center justify-between text-xs font-medium text-slate-400">
+                    <span>Statut: <span className="text-emerald-400">Connecté</span></span>
+                    <span>Fréquence: 120Hz</span>
+                </div>
+              </CardContent>
+            </Card>
 
-              <motion.div
-                variants={fadeInUp}
-                initial="initial"
-                animate="animate"
-                className="lg:col-span-2"
-              >
-                <Card className="h-full">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle>Présences actuelles</CardTitle>
-                        <CardDescription>{filteredPresences.length} bénéficiaire(s) présent(s)</CardDescription>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Rechercher..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-9 w-64"
-                          />
+            <Button className="w-full h-14 text-lg font-bold rounded-2xl shadow-lg bg-white text-slate-900 hover:bg-slate-50 border-2 border-slate-100 transition-all active:scale-95">
+                <UserPlus className="mr-2" /> Pointage Manuel
+            </Button>
+          </div>
+
+          {/* LISTE DES PRÉSENTS */}
+          <div className="lg:col-span-8">
+            <Card className="border-none shadow-xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl h-[700px] flex flex-col">
+              <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+                <CardTitle className="flex items-center gap-2">
+                    <Activity className="text-primary" /> Membres sur site
+                </CardTitle>
+                <div className="relative w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input placeholder="Rechercher..." className="pl-10 rounded-full bg-slate-100/50 border-none" />
+                </div>
+              </CardHeader>
+              <ScrollArea className="flex-1 p-6">
+                <div className="grid gap-4">
+                  {presencesActuelles.map((p) => (
+                    <motion.div 
+                      layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
+                      key={p.beneficiaire.id}
+                      className={`group flex items-center justify-between p-4 rounded-2xl border transition-all hover:shadow-md ${p.prolongee ? 'bg-red-50 border-red-100' : 'bg-white'}`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="h-14 w-14 rounded-full bg-slate-100 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center">
+                            {p.beneficiaire.photo ? <img src={p.beneficiaire.photo} alt="p" className="w-full h-full object-cover" /> : <Users className="text-slate-300" />}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-900">{p.beneficiaire.nom} {p.beneficiaire.prenom}</h4>
+                          <div className="flex gap-2 items-center mt-1">
+                             <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100 border-none text-[10px]">{p.beneficiaire.categorie}</Badge>
+                             <span className="text-[11px] text-slate-400 flex items-center gap-1"><Clock size={12} /> Entré à {formatDate(p.entree.timestamp, 'time')}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Tabs value={selectedCategorie} onValueChange={setSelectedCategorie}>
-                      <TabsList className="grid w-full grid-cols-5 mb-4">
-                        <TabsTrigger value="ALL">Tous</TabsTrigger>
-                        {CATEGORIES.map(cat => (
-                          <TabsTrigger key={cat.value} value={cat.value}>
-                            {cat.value}
-                          </TabsTrigger>
-                        ))}
-                      </TabsList>
-                      <TabsContent value={selectedCategorie} className="mt-0">
-                        <ScrollArea className="h-[500px] pr-4">
-                          <AnimatePresence mode="popLayout">
-                            {filteredPresences.length === 0 ? (
-                              <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="flex flex-col items-center justify-center py-12 text-center"
-                              >
-                                <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                                <p className="text-muted-foreground">Aucune présence actuellement</p>
-                              </motion.div>
-                            ) : (
-                              <div className="space-y-3">
-                                {filteredPresences.map((presence, index) => (
-                                  <motion.div
-                                    key={presence.beneficiaire.id}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: 20 }}
-                                    transition={{ ...springPresets.snappy, delay: index * 0.05 }}
-                                  >
-                                    <Card className={presence.prolongee ? 'border-destructive' : ''}>
-                                      <CardContent className="p-4">
-                                        <div className="flex items-center gap-4">
-                                          {presence.beneficiaire.photo && (
-                                            <img
-                                              src={presence.beneficiaire.photo}
-                                              alt={`${presence.beneficiaire.prenom} ${presence.beneficiaire.nom}`}
-                                              className="w-12 h-12 rounded-full object-cover"
-                                            />
-                                          )}
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
-                                              <p className="font-semibold truncate">
-                                                {presence.beneficiaire.prenom} {presence.beneficiaire.nom}
-                                              </p>
-                                              <Badge
-                                                variant="outline"
-                                                style={{
-                                                  borderColor: getCategorieColor(presence.beneficiaire.categorie),
-                                                  color: getCategorieColor(presence.beneficiaire.categorie)
-                                                }}
-                                              >
-                                                {presence.beneficiaire.categorie}
-                                              </Badge>
-                                              {presence.prolongee && (
-                                                <Badge variant="destructive" className="gap-1">
-                                                  <AlertCircle className="h-3 w-3" />
-                                                  +12h
-                                                </Badge>
-                                              )}
-                                            </div>
-                                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                              <span className="flex items-center gap-1">
-                                                <LogIn className="h-3 w-3" />
-                                                {formatDate(presence.entree.timestamp, 'time')}
-                                              </span>
-                                              <span className="flex items-center gap-1">
-                                                <Clock className="h-3 w-3" />
-                                                {formatDuration(presence.duree)}
-                                              </span>
-                                              <span className="text-xs font-mono">
-                                                {presence.beneficiaire.codeBarre}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </CardContent>
-                                    </Card>
-                                  </motion.div>
-                                ))}
-                              </div>
-                            )}
-                          </AnimatePresence>
-                        </ScrollArea>
-                      </TabsContent>
-                    </Tabs>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
-          </motion.div>
+                      <div className="text-right">
+                        <div className={`text-sm font-black font-mono ${p.prolongee ? 'text-red-500' : 'text-emerald-500'}`}>{formatDuration(p.duree)}</div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Depuis l'arrivée</span>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </Card>
+          </div>
         </div>
       </div>
     </Layout>
   )
+}
+
+function StatSimple({ label, value, color }: any) {
+    return (
+        <div className="px-6 py-2 text-center">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{label}</p>
+            <p className={`text-xl font-black ${color}`}>{value}</p>
+        </div>
+    )
 }
