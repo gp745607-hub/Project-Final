@@ -6,22 +6,21 @@
     "module": "ESNext",
     "skipLibCheck": true,
 
-    /* Bundler mode */
+    /* Sécurité et Compatibilité */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
+    "forceConsistentCasingInFileNames": true,
 
-    /* Linting */
-    "strict": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    /* Correction des erreurs VS Code */
+    "strict": true,
     "noImplicitAny": true,
-    "noFallthroughCasesInSwitch": false,
-
     "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
+    
     "paths": {
       "@/*": ["./src/*"]
     }
