@@ -198,7 +198,12 @@ function StatCard({ title, value, icon, gradient, onClick }: StatCardProps) {
 }
 
 // Petit bouton d'action pour la carte noire
-function QuickActionBtn({ label, icon, color, onClick }: { label: string, icon: any, color: string, onClick: () => void }) {
+function QuickActionBtn({ label, icon, color, onClick }: { 
+  label: string; 
+  icon: React.ReactNode; // Type correct pour Lucide icons
+  color: string; 
+  onClick: () => void; 
+}) {
   return (
     <button 
       onClick={onClick}
